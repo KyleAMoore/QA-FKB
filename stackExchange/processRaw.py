@@ -1,7 +1,5 @@
 """
-  #TODO: Adapt this code to work with new format and source
-  #      does not need doc2vec (yet) and should not yet involve
-  #      any excessive cleaning (lemmatization, etc.)
+
 """
 
 
@@ -9,6 +7,7 @@ import pickle
 import re
 from random import shuffle
 from tqdm import tqdm
+from sys import argv
 
 
 def save(obj, fname):
@@ -23,6 +22,25 @@ def load(fname):
     return obj
 
 def toDict(lines):
+    """
+        resulting structure:
+
+        que = {
+            id : {
+                    "text" : ..., 
+                    "score" : ...,
+                    "relation" : ...
+                 }
+        }
+
+        ans = {
+            id : {
+                    "text" : ...,
+                    "child" : ...
+                 }
+        }
+    """
+
     que = {}
     ans = {}
     print("Cleaning and separating data")
@@ -60,17 +78,33 @@ def cleanString(origStr):
     removePatt = re.compile("<.+?>|[^\s\w.?!]")       #for removing html tags and non-alphanum, non-terminating chars
     newStr = re.sub(removePatt, "", origStr)
 
-    newStr = re.sub(r"[!\.]+", " .", newStr)          #removes duplicate . and !  (space needed for tokenizer)
-    newStr = re.sub(r"\?+|[\?\.]{2.}", " ?", newStr)  #removes duplicate ?
-    newStr = re.sub(r"\s+", " ", newStr)              #convert all whitespace to single space
-    #newStr = re.sub(r"[\?\.]{2,}", " ?", newStr)     #converts combination punctuation to ? (for catching things like ?!)
+    newStr = re.sub(r"[!\.]+", ".", newStr)          #removes duplicate . and !, converts ! to .
+    newStr = re.sub(r"[\?\.]{2.}", " ?", newStr)     #removes duplicate ? and converts combination punctuation to ? (ex. ?!)
+    newStr = re.sub(r"\.", " .", newStr)             #TODO: may be able to be done more efficiently/easily. #adds space before every period (eases tokenization)
+    newStr = re.sub(r"\s+", " ", newStr)             #convert all whitespace to single space
 
     return newStr.lower()
 
-def tokenize(line):
-    return line.split(" ")
 
 def condense(questions, answers):
+    """
+        resulting structure:
+
+        que = [
+                {
+                    "text" : ..., 
+                    "score" : ...,
+                    "relation" : ...
+                }
+              ]
+
+        ans = [
+                {
+                    "text" : ...,
+                    "relation" : [...]
+                }
+              ]
+    """
     answerRel = {} #maintains a temporary relation between previous ids and new id(i.e. index)
     qList = []
     print("Condensing Questions")
@@ -98,15 +132,20 @@ def condense(questions, answers):
     return qList, aList
 
 def main():
-    fin = open("raw.csv", "r", errors="ignore", newline="\r\n") #because stackexchange ends csv lines with crlf and includes lf in body field
-    lines = fin.readlines()
-    fin.close()
-    que, ans = condense(*toDict(lines[1:]))
+    
+    rawFile = argv[1] if len(argv) > 1 else "raw.csv"
+    try:
+        fin = open(rawFile, "r", errors="ignore", newline="\r\n") #because stackexchange ends csv lines with crlf and includes lf in body field
+        lines = fin.readlines()
+        fin.close()
+        que, ans = condense(*toDict(lines[1:]))
 
-    fout = open("data.pkl", "wb")
-    pickle.dump(que, fout)
-    pickle.dump(ans, fout)
-    fout.close()
+        fout = open("data.pkl", "wb")
+        pickle.dump(que, fout)
+        pickle.dump(ans, fout)
+        fout.close()
+    except FileNotFoundError:
+        print(f"{rawFile} not found. Processing failed.")
 
 if __name__ == '__main__':
     main()
