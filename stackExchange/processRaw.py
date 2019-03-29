@@ -131,6 +131,9 @@ def condense(questions, answers):
     
     return qList, aList
 
+def process(lines):
+    return condense(*toDict(lines))
+
 def main():
     
     rawFile = argv[1] if len(argv) > 1 else "raw.csv"
