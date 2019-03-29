@@ -2,5 +2,6 @@
 *.csv
 *.json
 *.model
+*.tok
 *.mypy_cache*
 *.vscode*
