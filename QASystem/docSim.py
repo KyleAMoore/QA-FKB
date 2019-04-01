@@ -1,4 +1,5 @@
 import pickle
+from tqdm import tqdm
 from pathlib import Path
 from time import time
 from re import sub
@@ -17,6 +18,12 @@ def downloadNLTKData():
         find("corpora/stopwords")
     except:
         download("stopwords")
+
+def saveModel(model, filename="vec.model"):
+    model.save(filename)
+
+def loadModel(filename="vec.model"):
+    return Doc2Vec.load(filename)
 
 def processDoc(doc, docID = -1):
     """
@@ -40,7 +47,7 @@ def processDoc(doc, docID = -1):
     cleanDoc = (doc.lower()).split(" ")
 
     #remove stopwords (also removes empty strings from repeated spaces)
-    stopWords = set(stopWords.words("english"))
+    stopWords = set(stopwords.words("english"))
     cleanDoc = [tok for tok in cleanDoc if tok not in stopWords and tok != ""]
 
     lem = WordNetLemmatizer()
@@ -52,42 +59,43 @@ def processDoc(doc, docID = -1):
         elif posTag == "R": posTag = wordnet.ADV
         else:               posTag = wordnet.NOUN
         
-        cleanDoc[tok] = lem.lemmatize(cleanDoc[tok], posTag)
+        cleanDoc[tok] = lem.lemmatize(cleanDoc[tok][0], posTag)
 
-    return TaggedDocument(cleanDoc, [docID])
+    return cleanDoc
 
-def createVectorizer(data, modelFile="vectorizer.pkl"):
+def createVectorizer(data):
     """
         Creates and trains the Doc2Vec Model
 
         Assumes data is in standardized form that results from processRaw
         modules.
     """
-    model = Doc2Vec(documents=[processDoc(data[d],d) for d in range(len(data))],
+    print("Preparing Documents")
+    clean = [TaggedDocument(processDoc(data[d]),[d]) for d in tqdm(range(len(data)))]
+
+    print("Training Vectorizer")
+    model = Doc2Vec(documents=clean,
                     vector_size=50,
                     window=5,
                     alpha=0.025,
                     min_alpha=0.0001,
                     min_count=5,
                     workers=10,
-                    epochs=50) 
+                    epochs=500) 
     
     #TODO: can be uncommented when model is definitely sufficiently designed and trained
     #model.delete_temporary_training_data()
-    model.save(modelFile)
 
-def vectorize(doc, docID = -1, modelFile="vectorizer.pkl"):
+    return model
+
+def vectorize(model, doc):
     """
         !TEST
         Should receive doc in a raw form (that is to say that the processDoc
         function should not be used before this function) and should result in
-        a Doc2Vec representation for the document.
-
-        docID defaults to -1, and should only be left as the default when the
-        input document is being vectorized during the testing phase.
+        a Doc2Vec representation for the document..
     """
-    model = Doc2Vec.load(modelFile)
-    model.infer_vector(processDoc(doc),alpha=0.025,min_alpha=0.0001,epochs=50)
+    return model.infer_vector(processDoc(doc),alpha=0.025,min_alpha=0.0001,epochs=5)
 
 def compare(doc1, doc2):
     """
@@ -103,8 +111,8 @@ def compare(doc1, doc2):
     """
     dist = 0
     for i in range(len(doc1)):
-        dist += (doc1-doc2) ** 2
-    return dist ** (1/2)
+        dist += (doc1[i]-doc2[i]) ** 2
+    return dist ** (1/2) if dist > 0 else 1000000000
 
 def findSim(doc, docList, k = 1):
     """
@@ -121,10 +129,9 @@ def findSim(doc, docList, k = 1):
 
         Returns the indices of the k most similar documents
     """
-    docVec = vectorize(doc)
-    docList = [(d,1/compare(docVec,docList[d])) for d in range(len(docList))]
+    docList = [(d,1/compare(doc,docList[d])) for d in range(len(docList))]
     docList.sort(key=lambda x: x[1],reverse=True)
-    return [d[0] for d in docList[k]]
+    return [d[0] for d in docList[:k]]
 
 def preprocessTraining(data, outputFileName):
     """
@@ -143,8 +150,4 @@ def preprocessTraining(data, outputFileName):
     pickle.dump(vecs,fout)
     fout.close()
 
-def main():
-    downloadNLTKData()
-
-if __name__=="__main__":
-    main()
+downloadNLTKData()
