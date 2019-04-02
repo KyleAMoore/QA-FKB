@@ -1,10 +1,12 @@
 from keras_self_attention import SeqSelfAttention
 from keras.models import Model, load_model
-from keras.layers import Input, LSTM, Dense, Embedding, Bidirectional, TimeDistributed
-from keras.backend import concatenate
+from keras.layers import Input, LSTM, Dense, Embedding, Bidirectional, TimeDistributed, Softmax, Lambda
 from keras.regularizers import l1, l2
 from keras.preprocessing import text
+from tensorflow.dtypes import int64, float32, cast
+from tensorflow.math import argmax
 from numpy import array as nparray
+import keras.backend
 import pickle
 
 def createModel(vocabSize, srcLength=500, sumLength=100, wordEmbDim=128, contextVecLen=128):
@@ -24,9 +26,10 @@ def createModel(vocabSize, srcLength=500, sumLength=100, wordEmbDim=128, context
     #decoder output
     decLSTM = LSTM(units=contextVecLen, return_sequences=True)(att)
     dense = TimeDistributed(Dense(vocabSize, activation='softmax'))(decLSTM)
+    lmb = Lambda(lambda x: cast(argmax(x, axis=2, output_type=int64), float32))(dense)
 
     #encoder+decoder
-    model = Model(inputs=inputs, outputs=dense)
+    model = Model(inputs=inputs, outputs=lmb)
     model.compile(loss='categorical_crossentropy', optimizer='adam')
     
     model.ansLen = sumLength

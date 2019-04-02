@@ -115,9 +115,11 @@ def condense(questions, answers):
         qList.append(d)
 
     aList = []
+    questionRel = {}
     print("Condensing Answers")
     for i,d in tqdm(answers.items()):
         d["id"] = len(aList)
+        questionRel[i] = d["id"]
         parentId = answerRel[d["relation"]]
         d["relation"] = parentId
         if qList[parentId]["child"] != i: qList[parentId]["relation"].append(d["id"])
@@ -126,7 +128,7 @@ def condense(questions, answers):
     print("Ordering Answer Lists")
     # child being -1 indicates that there is no accepted answer => highest scored answer will be considered the accepted answer
     for que in tqdm(qList):
-        que["relation"] = ([] if que["child"] == -1 else [que["child"]]) + sorted(que["relation"], key=(lambda x: aList[x]["score"]), reverse=True)
+        que["relation"] = ([] if que["child"] == -1 else [questionRel[que["child"]]]) + sorted(que["relation"], key=(lambda x: aList[x]["score"]), reverse=True)
         del que["child"]
     
     return qList, aList

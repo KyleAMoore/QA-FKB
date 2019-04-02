@@ -30,7 +30,9 @@ def trainTestSplit(questions, split=0.2):
     indices = [i for i in range(len(questions))]
     shuffle(indices)
 
-    return indices[int(split * len(questions)):], indices[:int(split * len(questions))] 
+    #TODO: REMOVE THE FOLLOWING LINE. ONLY USED FOR TESTING PURPOSES
+    indices = indices[:100] #!reduces number of questions to 100 for faster testing
+    return indices[int(split * len(indices)):], indices[:int(split * len(indices))] 
 
 def main(startStage = 1):
     """
@@ -47,8 +49,9 @@ def main(startStage = 1):
                 ! 6. find 5 nearest questions in train set
                 ! extract top answer from each
                 ! 7. feed top answers into model
-                * 8. compare result to actual answer
+                ! 8. compare result to actual answer
     """
+    print("Processing Raw Data")
     if(startStage == 1):
         fin = open("raw.csv", "r", errors="ignore", newline="\r\n") #because stackexchange ends csv lines with crlf and includes lf in body field
         lines = fin.readlines()
@@ -60,6 +63,7 @@ def main(startStage = 1):
         que, ans = loadData("data.pkl")
 
     #split sets here
+    print("\nSplitting Training and Testing Set")
     if(startStage <= 2):
         trainQues, testQues = trainTestSplit(que, split=0.2)
         saveData("split.pkl", trainQues, testQues)
@@ -67,6 +71,7 @@ def main(startStage = 1):
         trainQues, testQues = loadData("split.pkl")
 
     #find nearest questions here
+    print("\nTraining Similar Question Selection Model")
     if(startStage <= 3):
         docVec = docSim.createVectorizer([que[i]["text"] for i in trainQues])
         docSim.saveModel(docVec, "seVec.model")
@@ -75,6 +80,7 @@ def main(startStage = 1):
 
     #extract answers
     numSim = 5
+    print("\nExtracting Candidate Answers in Training Set")
     if(startStage <= 4):
         queText = [que[i]["text"] for i in trainQues]
         simQueList = []
@@ -93,16 +99,16 @@ def main(startStage = 1):
                     and each subsequent string are the answers to similar questions 
         """
         ansList = [
-                    [ans[que[origQ]["relation"][0]]] +
+                    [ans[que[origQ]["relation"][0]]["text"]] +          
                     [
                         ans[que[simQ]["relation"][0]]["text"]
-                    for simQ in origQ]
-                  for origQ in simQueList]
+                    for simQ in simQueList[origQ]]
+                  for origQ in range(len(simQueList))]
 
         saveData("trainInput.pkl", ansList, queVectors)
     else:
         ansList, queVectors = loadData("trainInput.pkl")
-
+    
     #train model
     vocabSize = 3000
     ansLen = 100
@@ -111,14 +117,16 @@ def main(startStage = 1):
     batchSize = 32
     epochs = 1000
     validationSplit = 0.2
+    print("\nTraining Summarizer Model")
     if(startStage <= 5):
         summarizer = summary.createModel(vocabSize, numSim*ansLen, ansLen, wordEmbDim, contextVecLen)
-        summarizer, tokenizer = summary.trainModel(summarizer, ansLen, vocabSize, batchSize, epochs, validationSplit)
+        summarizer, tokenizer = summary.trainModel(summarizer, ansList, vocabSize, batchSize, epochs, validationSplit)
         summary.saveModel(summarizer, tokenizer, "seSum")
     else:
         summarizer, tokenizer = summary.loadModel("seSum")
 
     #find nearest questions to test set
+    print("\nFinding Similar Questions in Testing Set")
     if(startStage <= 6):
         testQText = [que[i]["text"] for i in testQues]
         actAnswers = [ans[que[i]["relation"][0]] for i in testQues]
@@ -140,6 +148,7 @@ def main(startStage = 1):
         testAnsList, testQVectors, actAnswers = loadData("testInput.pkl")
 
     #generate test summaries
+    print("\nGenerating Answers for Testing Questions")
     if(startStage <= 7):
         summaries = summary.generateSummaries(summarizer, testAnsList, tokenizer, batchSize)
         saveData("summaries.pkl", summaries)
@@ -147,6 +156,7 @@ def main(startStage = 1):
         summaries = loadData("summaries.pkl")
 
     #evaluate model
+    print("\nEvaluating Generated Answers")
     if(startStage <= 8):
         evaluators = [rouge.Rouge(metrics=['rouge-n', 'rouge-l', 'rouge-w'],
                                 max_n=4,

@@ -18,6 +18,10 @@ def downloadNLTKData():
         find("corpora/stopwords")
     except:
         download("stopwords")
+    try:
+        find("taggers/averaged_perceptron_tagger")
+    except:
+        download('averaged_perceptron_tagger')
 
 def saveModel(model, filename="vec.model"):
     model.save(filename)
