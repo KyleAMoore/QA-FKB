@@ -1,10 +1,11 @@
 from keras_self_attention import SeqSelfAttention
 from keras.models import Model, load_model
-from keras.layers import Input, LSTM, Dense, Embedding, Bidirectional, TimeDistributed, Softmax, Lambda
+from keras.layers import Input, LSTM, Dense, Embedding, Bidirectional, TimeDistributed, Softmax, Lambda, Flatten
 from keras.regularizers import l1, l2
-from keras.preprocessing import text
+from keras.preprocessing import text, sequence
 from tensorflow.dtypes import int64, float32, cast
 from tensorflow.math import argmax
+from tensorflow.random import categorical
 from numpy import array as nparray
 import keras.backend
 import pickle
@@ -12,7 +13,7 @@ import pickle
 def createModel(vocabSize, srcLength=500, sumLength=100, wordEmbDim=128, contextVecLen=128):
     #sourcetxt input
     inputs = (Input(shape=(srcLength,)))
-    emb = Embedding(vocabSize, wordEmbDim)(inputs)
+    emb = Embedding(vocabSize, wordEmbDim, mask_zero=True)(inputs)
     encLSTM = Bidirectional(LSTM(units=contextVecLen, return_sequences=True))(emb)
 
     att = SeqSelfAttention(attention_width=10,
@@ -23,13 +24,18 @@ def createModel(vocabSize, srcLength=500, sumLength=100, wordEmbDim=128, context
                            attention_regularizer_weight=1e-4,
                            name="Attn")(encLSTM)
 
+    trnsp1 = Lambda(lambda x: keras.backend.permute_dimensions(x, (0,2,1)))(att)
+    condense = Dense(100)(trnsp1)
+    trnsp2 = Lambda(lambda x: keras.backend.permute_dimensions(x, (0,2,1)))(condense)
+
     #decoder output
-    decLSTM = LSTM(units=contextVecLen, return_sequences=True)(att)
-    dense = TimeDistributed(Dense(vocabSize, activation='softmax'))(decLSTM)
-    lmb = Lambda(lambda x: cast(argmax(x, axis=2, output_type=int64), float32))(dense)
+    decLSTM = LSTM(units=contextVecLen, return_sequences=True)(trnsp2)
+    dense = TimeDistributed(Dense(vocabSize, activation='relu'))(decLSTM)
+    sample = TimeDistributed(Dense(1, activation='softmax'))(dense)
+    flat = Flatten()(sample)
 
     #encoder+decoder
-    model = Model(inputs=inputs, outputs=lmb)
+    model = Model(inputs=inputs, outputs=flat)
     model.compile(loss='categorical_crossentropy', optimizer='adam')
     
     model.ansLen = sumLength
@@ -44,7 +50,7 @@ def trainModel(model, inputs, vocabSize, batch_size = 32, epochs = 1000, validat
 
         returns: model and tokenizer
     """
-    tok = text.Tokenizer(vocabSize-1, lower=False, oov_token="OOV")
+    tok = text.Tokenizer(vocabSize-1, lower=False, oov_token="UNK")
     tok.fit_on_texts(ans for ansGroup in inputs for ans in ansGroup)
     
     inputAns = []
@@ -57,13 +63,15 @@ def trainModel(model, inputs, vocabSize, batch_size = 32, epochs = 1000, validat
         outp = tokAns[0][:model.ansLen]
 
         #pad sequences 
-        inp += [-1] * ((model.ansLen * numAnswers) - len(inp))
-        outp += [-1] * (model.ansLen - len(outp))
+        # inp += [-1] * ((model.ansLen * numAnswers) - len(inp))
+        # outp += [-1] * (model.ansLen - len(outp))
 
         inputAns.append(inp)
         outputAns.append(outp)
 
-    model.fit(nparray(inputAns), nparray(outputAns), batch_size=batch_size, epochs=epochs, verbose=1, validation_split=validation_split)
+    inputAns = sequence.pad_sequences(inputAns, maxlen=model.ansLen*numAnswers, padding="post", truncating="post")
+    outputAns = sequence.pad_sequences(outputAns, maxlen=model.ansLen, padding="post", truncating="post")
+    model.fit(inputAns, outputAns, batch_size=batch_size, epochs=epochs, verbose=1, validation_split=validation_split)
 
     return model, tok
 

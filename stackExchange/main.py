@@ -32,6 +32,7 @@ def trainTestSplit(questions, split=0.2):
 
     #TODO: REMOVE THE FOLLOWING LINE. ONLY USED FOR TESTING PURPOSES
     indices = indices[:100] #!reduces number of questions to 100 for faster testing
+    
     return indices[int(split * len(indices)):], indices[:int(split * len(indices))] 
 
 def main(startStage = 1):
@@ -116,6 +117,8 @@ def main(startStage = 1):
     contextVecLen = 128
     batchSize = 32
     epochs = 1000
+    #TODO: REMOVE THE FOLLOWING LINE. ONLY USED FOR TESTING PURPOSES
+    epochs=10
     validationSplit = 0.2
     print("\nTraining Summarizer Model")
     if(startStage <= 5):
