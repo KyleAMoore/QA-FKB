@@ -6,3 +6,5 @@
 *.mypy_cache*
 *.vscode*
 *__pycache__*
+*hist
+*.cvscores

@@ -30,9 +30,6 @@ def trainTestSplit(questions, split=0.2):
     indices = [i for i in range(len(questions))]
     shuffle(indices)
 
-    #TODO: REMOVE THE FOLLOWING LINE. ONLY USED FOR TESTING PURPOSES
-    indices = indices[:100] #!reduces number of questions to 100 for faster testing
-    
     return indices[int(split * len(indices)):], indices[:int(split * len(indices))] 
 
 def main(startStage = 1):
@@ -111,19 +108,17 @@ def main(startStage = 1):
         ansList, queVectors = loadData("trainInput.pkl")
     
     #train model
-    vocabSize = 3000
+    vocabSize = 5000
     ansLen = 100
     wordEmbDim = 128
     contextVecLen = 128
     batchSize = 32
-    epochs = 1000
-    #TODO: REMOVE THE FOLLOWING LINE. ONLY USED FOR TESTING PURPOSES
-    epochs=10
+    epochs = 200
     validationSplit = 0.2
     print("\nTraining Summarizer Model")
     if(startStage <= 5):
         summarizer = summary.createModel(vocabSize, numSim*ansLen, ansLen, wordEmbDim, contextVecLen)
-        summarizer, tokenizer = summary.trainModel(summarizer, ansList, vocabSize, batchSize, epochs, validationSplit)
+        summarizer, tokenizer = summary.trainModel(summarizer, ansList, vocabSize, ansLen, batchSize, epochs, validationSplit, fileName="seSum", cv=True)
         summary.saveModel(summarizer, tokenizer, "seSum")
     else:
         summarizer, tokenizer = summary.loadModel("seSum")
@@ -132,12 +127,12 @@ def main(startStage = 1):
     print("\nFinding Similar Questions in Testing Set")
     if(startStage <= 6):
         testQText = [que[i]["text"] for i in testQues]
-        actAnswers = [ans[que[i]["relation"][0]] for i in testQues]
-        sumQueList = []
+        actAnswers = [ans[que[i]["relation"][0]]["text"] for i in testQues]
+        simQueList = []
         
         testQVectors = [docSim.vectorize(docVec, q) for q in tqdm(testQText)]
 
-        for q in tqdm(range(len(queText))):
+        for q in tqdm(range(len(testQText))):
             simQueList.append(docSim.findSim(testQVectors[q], queVectors, numSim))
 
         testAnsList = [
@@ -153,7 +148,7 @@ def main(startStage = 1):
     #generate test summaries
     print("\nGenerating Answers for Testing Questions")
     if(startStage <= 7):
-        summaries = summary.generateSummaries(summarizer, testAnsList, tokenizer, batchSize)
+        summaries = summary.generateSummaries(summarizer, testAnsList, tokenizer, ansLen, batchSize)
         saveData("summaries.pkl", summaries)
     else:
         summaries = loadData("summaries.pkl")
@@ -173,8 +168,8 @@ def main(startStage = 1):
                                 stemming=True)
                       for tf in [True, False]]
 
-        scoresAvg = evalAvg[0].get_scores(summaries, actAnswers)
-        scoresBest = evalBest[1].get_scores(summaries, actAnswers)
+        scoresAvg = evaluators[0].get_scores(summaries, actAnswers)
+        scoresBest = evaluators[1].get_scores(summaries, actAnswers)
         saveData("scores.pkl", scoresAvg, scoresBest)
     else:
         scores = loadData("scores.pkl")
