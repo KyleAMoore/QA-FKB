@@ -22,6 +22,10 @@ def downloadNLTKData():
         find("taggers/averaged_perceptron_tagger")
     except:
         download('averaged_perceptron_tagger')
+    try:
+        find("tokenizers/punkt")
+    except:
+        download("punkt")
 
 def saveModel(model, filename="vec.model"):
     model.save(filename)

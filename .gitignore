@@ -7,3 +7,5 @@
 *.vscode*
 *__pycache__*
 *creds
+*hist
+*.cvscores
