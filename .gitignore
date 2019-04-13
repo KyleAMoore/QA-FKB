@@ -6,5 +6,6 @@
 *.mypy_cache*
 *.vscode*
 *__pycache__*
+*creds
 *hist
 *.cvscores
