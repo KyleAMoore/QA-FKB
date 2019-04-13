@@ -3,7 +3,7 @@ from keras.models import Model, load_model, model_from_json
 from keras.layers import Input, LSTM, Dense, Embedding, Bidirectional, TimeDistributed, Softmax, Lambda, Flatten
 from keras.regularizers import l1, l2
 from keras.preprocessing import text, sequence
-from keras.callbacks import ModelCheckpoint
+from keras.callbacks import ModelCheckpoint, EarlyStopping
 from numpy import array as nparray
 from numpy import zeros, concatenate
 from keras_preprocessing.text import tokenizer_from_json
@@ -48,7 +48,7 @@ def createModel(vocabSize, srcLength=500, sumLength=100, wordEmbDim=128, context
     
     return model
 
-def trainModel(model, inputs, vocabSize, ansLen=100, batch_size = 32, epochs = 200, validation_split=0.2, fileName="summarizer", cv=False):
+def trainModel(model, inputs, vocabSize, ansLen=100, batch_size = 32, epochs = 200, validation_split=0.2, fileName="summarizer", cv=False, es=False):
     """
         Trains the model
         * inputs should be a list of answer groups. Each answer group should be
@@ -101,13 +101,21 @@ def trainModel(model, inputs, vocabSize, ansLen=100, batch_size = 32, epochs = 2
         scoreFile.close()
     
     print("Training Model")
+    callbacks=[ModelCheckpoint(fileName+"{epoch:02d}_{loss:.2f}_{val_loss:.2f}.model", verbose=1, period=10)]
+    if(es):
+        callbacks.append(EarlyStopping(monitor="val_loss",
+                                       patience=2,
+                                       verbose=1,
+                                       mode="min",
+                                       restore_best_weights=True))
+    
     model.fit(inputAns,
               outputAns,
               batch_size=batch_size,
               epochs=epochs,
               verbose=1,
               validation_split=validation_split, 
-              callbacks=[ModelCheckpoint(fileName+"{epoch:02d}_{loss:.2f}_{val_loss:.2f}.model", verbose=1, period=10)])
+              callbacks=callbacks)
 
     return model, tok
 
