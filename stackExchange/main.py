@@ -75,7 +75,7 @@ def main(startStage = 1):
         docSim.saveModel(docVec, "seVec.model")
     else:
         docVec = docSim.loadModel("seVec.model")
-
+    
     #extract answers
     numSim = 5
     print("\nExtracting Candidate Answers in Training Set")
@@ -118,10 +118,11 @@ def main(startStage = 1):
     print("\nTraining Summarizer Model")
     if(startStage <= 5):
         summarizer = summary.createModel(vocabSize, numSim*ansLen, ansLen, wordEmbDim, contextVecLen)
-        summarizer, tokenizer = summary.trainModel(summarizer, ansList, vocabSize, ansLen, batchSize, epochs, validationSplit, fileName="seSum", cv=True)
+        summarizer, tokenizer = summary.trainModel(summarizer, ansList, vocabSize, ansLen, batchSize, epochs, validationSplit, fileName="seSum", cv=True, es=True, halfInpCV=True)
         summary.saveModel(summarizer, tokenizer, "seSum")
     else:
         summarizer, tokenizer = summary.loadModel("seSum")
+
 
     #find nearest questions to test set
     print("\nFinding Similar Questions in Testing Set")
@@ -153,6 +154,7 @@ def main(startStage = 1):
     else:
         summaries = loadData("summaries.pkl")
 
+    """
     #evaluate model
     print("\nEvaluating Generated Answers")
     if(startStage <= 8):
@@ -173,7 +175,7 @@ def main(startStage = 1):
         saveData("scores.pkl", scoresAvg, scoresBest)
     else:
         scores = loadData("scores.pkl")
-
+    """
 
 if __name__=="__main__":
     if len(sys.argv) == 1:

@@ -52,7 +52,7 @@ def main(startStage = 1):
     print("Processing Raw Data")
     if(startStage == 1):
         posts = loadData("posts.pkl")
-        que, ans = processRaw.process(posts)
+        que, ans = processRaw.process(*posts)
 
         saveData("data.pkl", que, ans)
     else:
@@ -120,7 +120,7 @@ def main(startStage = 1):
         summary.saveModel(summarizer, tokenizer, "redSum")
     else:
         summarizer, tokenizer = summary.loadModel("redSum")
-
+        
     #find nearest questions to test set
     print("\nFinding Similar Questions in Testing Set")
     if(startStage <= 6):
@@ -151,6 +151,7 @@ def main(startStage = 1):
     else:
         summaries = loadData("summaries.pkl")
 
+    """
     #evaluate model
     print("\nEvaluating Generated Answers")
     if(startStage <= 8):
@@ -172,7 +173,8 @@ def main(startStage = 1):
     else:
         scores = loadData("scores.pkl")
 
-
+    """
+        
 if __name__=="__main__":
     if len(sys.argv) == 1:
         startStage = 1

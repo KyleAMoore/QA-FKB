@@ -48,7 +48,7 @@ def createModel(vocabSize, srcLength=500, sumLength=100, wordEmbDim=128, context
     
     return model
 
-def trainModel(model, inputs, vocabSize, ansLen=100, batch_size = 32, epochs = 200, validation_split=0.2, fileName="summarizer", cv=False, es=False):
+def trainModel(model, inputs, vocabSize, ansLen=100, batch_size = 32, epochs = 200, validation_split=0.2, fileName="summarizer", cv=False, es=False, halfInpCV=False):
     """
         Trains the model
         * inputs should be a list of answer groups. Each answer group should be
@@ -94,14 +94,15 @@ def trainModel(model, inputs, vocabSize, ansLen=100, batch_size = 32, epochs = 2
     
     if(cv):
         print("Performing Cross-Validation")
-        scores = crossValidate(model.to_json(), inputAns[:10], outputAns[:10])
+        factor = 2 if halfInpCV else 1
+        scores = crossValidate(model.to_json(), inputAns[:int(len(inputAns)/factor)], outputAns[:int(len(outputAns)/factor)])
         print(scores)
         scoreFile = open(fileName+".cvscores", "wb")
         pickle.dump(scores, scoreFile)
         scoreFile.close()
     
     print("Training Model")
-    callbacks=[ModelCheckpoint(fileName+"{epoch:02d}_{loss:.2f}_{val_loss:.2f}.model", verbose=1, period=10)]
+    callbacks=[ModelCheckpoint(fileName+"{epoch:02d}_{loss:.2f}_{val_loss:.2f}.model", verbose=1, period=5)]
     if(es):
         callbacks.append(EarlyStopping(monitor="val_loss",
                                        patience=2,
@@ -134,42 +135,34 @@ def generateSummaries(model, inputs, tokenizer, ansLen=100, batch_size=32,):
         
         inputAns.append(inp)
     inputAns = sequence.pad_sequences(inputAns, maxlen=ansLen*numAnswers, padding="post", truncating="post")
-    print(*inputAns, sep='\n')
+    
     tokSumm = model.predict(nparray(inputAns), batch_size=batch_size, verbose=1)
     #removes padding tokens before conversion
-    print(tokSumm)
-    tokSum = [sample(summ) for summ in tokSumm]
+    
+    tokSumm = [[sample(word) for word in summ] for summ in tokSumm]
     summaries = tokenizer.sequences_to_texts(tokSumm)
 
     return summaries
 
 def crossValidate(modelJSON, input, output, epochs=5, batch_size=32, verbose=1, k=5):
-    indices = [(int(len(input)*(i/k)),int(len(input) *((i+1)/k)))  for i in range(k)]
     losses = []
-    count = 1
-    for start,stop in indices:
-        print(f"Cross validation stage {str(count)} out of {k}")
-        count += 1
-        tempInp = concatenate([input[0:start], input[stop:len(input)], input[start:stop]])
-        tempOut = concatenate([output[0:start], output[stop:len(input)], output[start:stop]])
+    for i in range(k):
+        print(f"Cross validation stage {i+1} out of {k}")
+        input = concatenate([input[int(len(input)/k):], input[:int(len(input)/k)]])
+        output = concatenate([output[int(len(output)/k):], output[:int(len(output)/k)]])
         
         model = model_from_json(modelJSON, custom_objects={'SeqSelfAttention':SeqSelfAttention})
         model.compile(loss='categorical_crossentropy', optimizer='adam')
-        hist = model.fit(tempInp, tempOut, epochs=epochs, verbose=verbose, validation_split=int(1/k))
-        losses.append(hist)
+        hist = model.fit(input, output, epochs=epochs, verbose=verbose, validation_split=1/k)
+        losses.append(hist.history)
         
         del(model)
-        del(tempInp)
-        del(tempOut)
         gc.collect()
-        
-    fout = open("hist", "wb")
-    pickle.dump(losses, fout)
-    fout.close()
-    return hist
+
+    return losses
     
 def sample(vector):
-    ind = random.random(0,1)
+    ind = random.random()
     prob = 0
     for p in range(len(vector)):
         prob += vector[p]
