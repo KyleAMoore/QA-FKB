@@ -21,7 +21,7 @@ def loadData(filename):
         except EOFError:
             break
     fin.close()
-    return tuple(objs)
+    return tuple(objs) if len(objs) > 1 else objs[0]
 
 def trainTestSplit(questions, split=0.2):
     """
@@ -154,12 +154,12 @@ def main(startStage = 1):
     else:
         summaries = loadData("summaries.pkl")
 
-    """
+
     #evaluate model
     print("\nEvaluating Generated Answers")
     if(startStage <= 8):
         evaluators = [rouge.Rouge(metrics=['rouge-n', 'rouge-l', 'rouge-w'],
-                                max_n=4,
+                                max_n=3,
                                 limit_length=True,
                                 length_limit=100,
                                 length_limit_type='words',
@@ -174,8 +174,25 @@ def main(startStage = 1):
         scoresBest = evaluators[1].get_scores(summaries, actAnswers)
         saveData("scores.pkl", scoresAvg, scoresBest)
     else:
-        scores = loadData("scores.pkl")
-    """
+        scoresAvg, scoresBest = loadData("scores.pkl")
+    
+    printScores(scoresAvg, "average")
+    print("\n")
+    printScores(scoresBest, "best")
+
+def printScores(scores, label):
+    print(' '+formatItem(label, 91, '-'))
+    print("|        metric        |       f1-score       |      precision       |        recall        |")
+    print('|'+'-' * 91+'|')
+    for met, metScores in scores.items():
+        print('|'+formatItem(met), formatItem(metScores["f"]), formatItem(metScores["p"]), formatItem(metScores["r"]), sep='|', end="|\n")
+    print(' '+'-' * 91)
+
+def formatItem(cont, length=22, filler=' '):
+    cont = str(cont)
+    cont = (filler * (int(length / 2) - int(len(cont) / 2))) + cont
+    cont += filler * (length - len(cont))
+    return cont
 
 if __name__=="__main__":
     if len(sys.argv) == 1:
