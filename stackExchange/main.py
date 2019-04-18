@@ -1,6 +1,6 @@
 import sys; sys.path.append("..\\")
 from QASystem import docSim, summary
-from random import shuffle
+from random import shuffle, randint
 from tqdm import tqdm
 import processRaw
 import rouge
@@ -48,6 +48,7 @@ def main(startStage = 1):
                 ! extract top answer from each
                 ! 7. feed top answers into model
                 ! 8. compare result to actual answer
+                ! save results to disk
     """
     print("Processing Raw Data")
     if(startStage == 1):
@@ -142,9 +143,9 @@ def main(startStage = 1):
                         for simQ in origQ]
                       for origQ in simQueList]
 
-        saveData("testInput.pkl", testAnsList, testQVectors, actAnswers)
+        saveData("testInput.pkl", testAnsList, testQText, actAnswers)
     else:
-        testAnsList, testQVectors, actAnswers = loadData("testInput.pkl")
+        testAnsList, testQText, actAnswers = loadData("testInput.pkl")
 
     #generate test summaries
     print("\nGenerating Answers for Testing Questions")
@@ -158,35 +159,54 @@ def main(startStage = 1):
     #evaluate model
     print("\nEvaluating Generated Answers")
     if(startStage <= 8):
-        evaluators = [rouge.Rouge(metrics=['rouge-n', 'rouge-l', 'rouge-w'],
+        evaluator = rouge.Rouge(metrics=['rouge-n', 'rouge-l', 'rouge-w'],
                                 max_n=3,
                                 limit_length=True,
                                 length_limit=100,
                                 length_limit_type='words',
-                                apply_avg=tf,
-                                apply_best=not tf,
+                                apply_avg=True,
+                                apply_best=False,
                                 alpha=0.5,
                                 weight_factor=1.2,
                                 stemming=True)
-                      for tf in [True, False]]
 
-        scoresAvg = evaluators[0].get_scores(summaries, actAnswers)
-        scoresBest = evaluators[1].get_scores(summaries, actAnswers)
-        saveData("scores.pkl", scoresAvg, scoresBest)
+        scoresAvg = evaluator.get_scores(summaries, actAnswers)
+        saveData("scores.pkl", scoresAvg)
     else:
-        scoresAvg, scoresBest = loadData("scores.pkl")
+        scoresAvg = loadData("scores.pkl")
     
-    printScores(scoresAvg, "average")
-    print("\n")
-    printScores(scoresBest, "best")
+    outf = open("results/rouge_avg", "w")
+    outf.write(formatScores(scoresAvg, "average"))
+    outf.close()
 
-def printScores(scores, label):
-    print(' '+formatItem(label, 91, '-'))
-    print("|        metric        |       f1-score       |      precision       |        recall        |")
-    print('|'+'-' * 91+'|')
+    testQText = [que[i]["text"] for i in testQues]
+
+    for i, res in sampleResults(testQText, actAnswers, summaries).items():
+        outf = open(f"results/qa-trip_{i}", "w")
+        outf.write(f"{testQText[i]}\n\n{actAnswers[i]}\n\n{summaries[i]}")
+        outf.close()
+
+def sampleResults(questions, actAns, genAns, n=20):
+    ind = set()
+    while len(ind) < n:
+        ind.add(randint(0,len(questions)-1))
+
+    samples = {}
+    for i in ind:
+        samples[i] = {'q' : questions[i], 'a' : actAns[i], 'r' : genAns[i]}
+    
+    return samples
+
+def formatScores(scores, label):
+    retStr = ""
+    retStr += ' ' + formatItem(label, 91, '-') + "\n"
+    retStr += "|        metric        |       f1-score       |      precision       |        recall        |" + "\n"
+    retStr += '|' + ('-' * 91) + '|' + "\n"
     for met, metScores in scores.items():
-        print('|'+formatItem(met), formatItem(metScores["f"]), formatItem(metScores["p"]), formatItem(metScores["r"]), sep='|', end="|\n")
-    print(' '+'-' * 91)
+        retStr += '|' + "|".join([formatItem(met), formatItem(metScores["f"]), formatItem(metScores["p"]), formatItem(metScores["r"])]) + "|\n"
+    retStr += ' ' + ('-' * 91)
+
+    return retStr
 
 def formatItem(cont, length=22, filler=' '):
     cont = str(cont)
